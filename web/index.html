@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoFlow — Concesionarias (DEMO)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; }
+    header { padding: 16px 24px; background: #111; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 18px; margin: 0; }
+    header small { color: #bbb; }
+    main { padding: 16px 24px; }
+    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+    section { background: #fff; border: 1px solid #eee; border-radius: 10px; overflow: hidden; }
+    .panel { padding: 16px; }
+    label { display: block; font-size: 12px; color: #555; margin: 8px 0 4px; }
+    input, select, button { padding: 8px; width: 100%; box-sizing: border-box; }
+    button { cursor: pointer; }
+    .kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 12px; overflow-x: auto; }
+    .col { background: #fafafa; border: 1px solid #eee; border-radius: 8px; min-width: 240px; display: flex; flex-direction: column; }
+    .col h3 { margin: 0; padding: 10px 12px; background: #f5f5f5; border-bottom: 1px solid #eee; font-size: 14px; }
+    .col .cards { padding: 10px; display: grid; gap: 8px; }
+    .card { border: 1px solid #ddd; background: #fff; border-radius: 8px; padding: 10px; font-size: 14px; }
+    .muted { color: #666; font-size: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>AutoFlow — Concesionarias</h1>
+    <small>Demo — API y CRM simple</small>
+  </div>
+  <div><small><code>/api/*</code> disponible</small></div>
+</header>
+
+<main>
+  <div class="grid">
+    <section>
+      <div class="panel">
+        <h2>Nueva oportunidad</h2>
+        <label>Nombre del cliente</label>
+        <input id="nombre" placeholder="Ej: Juan Pérez" />
+        <label>Teléfono</label>
+        <input id="telefono" placeholder="Ej: +54 9 ..." />
+        <label>Modelo de interés</label>
+        <input id="modelo" placeholder="Ej: SUV X" />
+        <label>Fuente del lead</label>
+        <select id="fuente">
+          <option>Web</option>
+          <option>Instagram</option>
+          <option>Feria</option>
+          <option>Referido</option>
+          <option>WhatsApp</option>
+        </select>
+        <div class="row">
+          <div><label>Monto ofrecido (opcional)</label><input id="monto" type="number" /></div>
+          <div><label>Descuento aplicado (opcional)</label><input id="descuento" type="number" /></div>
+        </div>
+        <button id="crear">Crear oportunidad</button>
+        <div id="crearMsg" class="muted" style="margin-top:6px;"></div>
+        <hr/>
+        <button id="recargar">Refrescar tablero</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="panel">
+        <h2>Pipeline</h2>
+        <div id="kanban" class="kanban"></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+async function jget(url) { const r = await fetch(url); return r.json(); }
+async function jpost(url, data) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!r.ok) throw new Error(await r.text()); return r.json();
+}
+async function jpatch(url, data) {
+  const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  if (!r.ok) throw new Error(await r.text()); return r.json();
+}
+
+async function loadBoard() {
+  const stages = await jget('/api/pipeline');
+  const opps = await jget('/api/opportunities');
+  const kanban = document.getElementById('kanban');
+  kanban.innerHTML = '';
+  stages.forEach(s => {
+    const col = document.createElement('div');
+    col.className = 'col';
+    col.innerHTML = `<h3>${s.name}</h3><div class="cards" id="col_${s.id}"></div>`;
+    kanban.appendChild(col);
+  });
+  opps.forEach(o => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const c = o.data || {};
+    card.innerHTML = `
+      <div><strong>${o.title}</strong></div>
+      <div class="muted">${c.nombre_cliente || ''} — ${c.telefono || ''}</div>
+      <div class="muted">Modelo: ${c.modelo_interes || ''}</div>
+      <div class="muted">Fuente: ${c.fuente_lead || ''}</div>
+      <div class="row" style="margin-top:8px;">
+        <select data-move="${o.id}"></select>
+        <button data-go="${o.id}">Mover</button>
+      </div>
+    `;
+    const select = card.querySelector('select[data-move]');
+    stages.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id; opt.textContent = s.name;
+      if (s.id === o.stage) opt.selected = true;
+      select.appendChild(opt);
+    });
+    card.querySelector('button[data-go]').onclick = async () => {
+      const to = select.value;
+      await jpatch(`/api/opportunities/${o.id}/move`, { to_stage: to });
+      await loadBoard();
+    };
+    const host = document.getElementById(`col_${o.stage}`);
+    if (host) host.appendChild(card);
+  });
+}
+
+document.getElementById('crear').onclick = async () => {
+  const nombre = document.getElementById('nombre').value.trim();
+  const telefono = document.getElementById('telefono').value.trim();
+  const modelo = document.getElementById('modelo').value.trim();
+  const fuente = document.getElementById('fuente').value;
+  const monto = document.getElementById('monto').value;
+  const desc = document.getElementById('descuento').value;
+  try {
+    const opp = await jpost('/api/opportunities', {
+      nombre_cliente: nombre, telefono, modelo_interes: modelo, fuente_lead: fuente,
+      monto_ofrecido: monto ? Number(monto) : undefined,
+      descuento_aplicado: desc ? Number(desc) : undefined
+    });
+    document.getElementById('crearMsg').textContent = `Creada: ${opp.id}`;
+    document.getElementById('nombre').value=''; document.getElementById('telefono').value=''; document.getElementById('modelo').value=''; document.getElementById('monto').value=''; document.getElementById('descuento').value='';
+    await loadBoard();
+  } catch (e) {
+    document.getElementById('crearMsg').textContent = 'Error: ' + e.message;
+  }
+};
+
+document.getElementById('recargar').onclick = loadBoard;
+
+loadBoard();
+</script>
+</body>
+</html>
