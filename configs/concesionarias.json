@@ -1,0 +1,28 @@
+{
+  "pipeline": "Ventas_Automotriz",
+  "stages": [
+    {"id": "contacto", "name": "Contacto inicial"},
+    {"id": "interesado", "name": "Interesado"},
+    {"id": "prueba", "name": "Prueba de manejo"},
+    {"id": "cotizacion", "name": "Cotización enviada"},
+    {"id": "negociacion", "name": "Negociación"},
+    {"id": "cerrado", "name": "Venta cerrada"},
+    {"id": "perdido", "name": "Perdido"}
+  ],
+  "fields": {
+    "global": [
+      {"key": "nombre_cliente", "type": "text", "required": true},
+      {"key": "telefono", "type": "text", "required": true},
+      {"key": "modelo_interes", "type": "text", "required": true},
+      {"key": "fuente_lead", "type": "select", "options": ["Web", "Instagram", "Feria", "Referido", "WhatsApp"]}
+    ],
+    "by_stage": {
+      "cotizacion": [{"key": "monto_ofrecido", "type": "number"}],
+      "negociacion": [{"key": "descuento_aplicado", "type": "number", "min": 0, "max": 20}]
+    }
+  },
+  "rules": [
+    {"when": {"stage_entered": "cotizacion"}, "then": ["crear_tarea:seguimiento_48h"]},
+    {"when": {"stage_entered": "prueba"}, "then": ["crear_evento:prueba_manejo"]}
+  ]
+}
